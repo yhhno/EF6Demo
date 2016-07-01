@@ -122,3 +122,11 @@ EntityFramework是建立在ADO.NET框架之上的。它下面仍旧使用了ADO.
 	Entity Framework Migrations用于脚本haunted结构的改变，以及将结构化的改变应用到数据库，这样就将它从软件的一个版本移动到另一个版本
 	Dbcontex代表数据的抽象，它有基于集合的属性，该属性表示数据库中的表
 	EF使用provider架构时，它可以使用任何具有provider的数据库工作，此外所有主要的数据库引擎都支持，MySQL,DB2,and Oralce
+
+
+
+	博文精彩评论
+	01microtry 
+	数据库和应用程序是两种不同的实现，他们之间不应该相互依赖，
+    而是共同依赖抽象：设计文档
+    所谓的codefirst或者dbfirst都不可能成为复杂的软件系统的优秀的解决方案

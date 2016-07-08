@@ -1,0 +1,147 @@
+﻿之前学习了EF中“约定大于配置”的概念，如果创建数据库的表结构，以及如何管理实体间的三种关系和三种继承模式，
+ 现在我们要学习EF的三个方面： 数据库的创建，种子数据的填充及LINQ方式的CURD的操作详细用法
+
+ 1管理数据库创建
+  1.1管理数据库连接
+     1.1.1 使用配置文件管理连接
+	 在数据库上下文类中，如果我们只继承了无参数的DbContext，并且在配置文件中创建了和数据库上下文类同名的连接字符串，那么EF会使用该连接字符串自动计算出该数据库的位置和数据库名。比如，我们的我们的上下文定义如下
+
+	 public class SampleDbEntities：DbContext{}
+
+	 如果我们在配置文件中定义的链接字符串如下：
+
+	 <connectionStrings>
+<add name="SampleDbEntities" connectionString="Data Source=(LocalDb)\v11.0;Initial Catalog=myTestDb;Integrated Security=SSPI;AttachDBFilename=|DataDirectory|\myTestDb.mdf" providerName="System.Data.SqlClient" />
+     </connectionStrings>
+	 这样，EF会使用该字符串执行数据库操作，究竟发生了什么呢？
+
+	 当运行应用程序时，EF会寻找我们的上下文类名，即“SampleDbEntities”，并在配置文件中寻找和它同名的连接字符串，然后它会使用该字符串计算出使用哪个数据库Provider，之后检查数据库位置（例子中是当前的数据目录），之后会在指定的位置创建一个明文myTestDb.mdf的数据库文件，同时根据连接字符串的Initial Catelog属性创建一个名为myTestDb的数据库。
+
+	 使用配置文件指定数据库位置和名字对于控制上下文类的连接参数也许是最简单和最有效的方式，另一个好处是如果我们想为开发、生产和临时环境创建各自的连接字符串，那么在配置文件中更改连接字符串并在开发时将它执行确定的数据库也是一种方法。
+	 这里要注意的重要的事情是在配置文件中定义的连接字符串具有最高优先权，它会覆盖所有在其他地方制定的连接参数
+	 从最佳实践的角度，也许不推荐使用配置文件，注入连接字符串是一种更好的方式，因为它给开发者更多的控制权和监管权
+
+
+	 1.1.2 使用已存在的ConnectionString
+	 如果我们已经有了一个定义数据库位置和名称的ConnectionString，并且我们想在数据库上下文类中使用这个连接字符串，如下：
+	 <connectionStrings>
+<add name="AppConnection" connectionString="Data Source=(LocalDb)\v11.0;Initial Catalog=testDb;Integrated Security=SSPI;AttachDBFilename=|DataDirectory|\testDb.mdf" providerName="System.Data.SqlClient" />
+</connectionStrings>
+      那么我们可以将该连接字符串的名字传入数据库上下文DbContext，的构造函数中，如下表示
+	  public class SampleDbEntities:DbContext{
+	  pubic SampleDbEntities():base("name=AppConnection")
+	  {
+	  }
+	  }
+
+	  上面的代码将连接字符串的名字传给DbContext类的构造函数，这样一来，我们的数据库上下文就是开始使用连接字符串了。
+	  如果在配置文件中还有一个和数据库上下文类同名的ConnectionString，那么就会使用配置文件中的同名连接字符串，无论我们对传入的连接字符串名称如何改变，都是无济于事的，也就是说和数据库上下文类名同名的连接字符串优先权更大。
+
+
+	  1.1.3 使用已存在的连接
+	  通常在一些老项目中，我们只会在项目中的某个部分使用EF Code First，同时，我们想对数据库上下文类使用已经存在的数据库连接，如果要实现这个，可将连接对象传给DbContext类的构造函数。如下
+	  public class SampleDbEntities:Dbcontext
+	  {
+	  pubilc SampleDbEntities(DbConnection con):base(con,contextOwnsConnection:false){
+	  }
+	  }
+
+	  这里要注意一下contextOwnsConnection参数，之所以将它作为false传入到上下文，因为它是从外部传入的，当上下文出了范围时，可能会有人想要使用该链接，如果传入true的话，那么一旦上下文出了范围，数据库连接就会立即关闭
+
+	  
+
+
+	  1.2 管理数据库初始化
+	  首次运行EF Code First应用时，EF会做下面的这些事情
+	   1.检查正在使用的DbContext类
+	   2.找到该上下文类使用的connectionString
+	   3.找到领域实体并提取模式相关的信息
+	   4.创建数据库
+	   5.将将数据插入系统
+    一旦模式信息提取出来，EF会使用数据库初始化器将该模式信息推送给数据库，数据库初始化器有很多可能的策略，EF默认的策略是如果数据库不存在，那么就重新创建；如果存在的话就使用当前存在的数据库，当然，我们有时也可能需要覆盖默认的策略，可能用到的数据库初始化策略如下：
+	   1.CreateDatabaseIfNotExists：顾名思义，如果数据库不存在，那么就重新创建，否则就使用现在的数据库，如果从领域模型中提取到的模式信息和实际的数据库模式不匹配，那么就抛出异常
+	   2.DropCreateDatabaseAlways：如果使用了该策略，那么每次运行程序时，数据库都会被销毁，这在开发周期的早期阶段通常很有用（比如设计领域实体时），从单元测试的角度也很有用
+	   3.DropCrateDatabaseIfModelChanges： 这个策略的意思就是说，如果领域模型发生了变化（具体而言，从领域实体提取出来的模式信息和实际的数据库模式信息失配时），就会销毁以前的数据库（如果存在的话），并创建新的数据库
+	   4.MigrateDatabaseToLatestVersion（从EF4.3才可用）：如果使用了该初始化器，那么无论什么时候更新实体模型，EF都会自动地更新数据库模式，这里很重要的一点是，这种策略更新数据库模式不会丢失数据，或者是在已有的数据库中更新已存在的数据库对象  
+
+	   1.2.1 设置初始化策略
+	   EF默认使用CreateDatabaseIfNotExists作为默认初始化器，如果要覆盖这个策略，那么需要在DbContex类中的构造函数中使用Database.SetInitializer方法，下面的例子使用DropCreateDatabaseIfNotExists策略默认覆盖默认的策略：
+
+		 public class SampleDbEntities : DbContext
+			{
+				public SampleDbEntities()
+					: base( "name=AppConnection" )
+				{
+					Database.SetInitializer<SampleDbEntities>( new DropCreateDatabaseIfModelChanges<SampleDbEntities>() );
+				}
+			}
+
+	   这样一来，无论什么时候创建上下文类，Database.SetInitializer方法都会被调用，并且将数据库初始化策略设置为DropCreateDatabaseIfModelChanges。
+      如果处于生产环境，那么我们肯定不想丢失已存在的数据。这时我们就需要关闭该初始化器，只需要将null传给Database.SetInitializer方法
+	     public class SampleDbEntities : DbContext
+			{
+				public SampleDbEntities()
+					: base( "name=AppConnection" )
+				{
+					Database.SetInitializer<SampleDbEntities>(null);
+				}
+			} 
+
+
+	2 填充种子数据
+	目前为止，无论我们选择哪种策略初始化数据库，生成的数据库都是一个空的数据库。但是许多情况下我们总想在数据库创建之后，首次使用之前就插入一些数据，此外，开发阶段可能想以admin的资格为其填充一些数据，或者为了测试应用在特定的场景中表现如何，想要伪造一些数据。
+	当我们使用DropCreateDatabaseAlways和DropCreateDatabaseIfNotExists初始化策略时，插入种子数据非常重要，因为每次运行应用时，数据库都要重新创建，每次数据库创建之后再手动插入数据非常乏味，接下来我们看一下当数据库创建之后如何使用EF来插入种子数据。
+
+	为了向数据库插入一些初始化数据，我们需要创建满足下列条件的数据库初始化器类
+	 1.从已存在的数据库初始化器类中派生数据
+	 2.在数据库创建期间种子化
+	2.1 定义领域实体
+	假设我们的数据模型Employee定义如下
+	public class Employer
+		{
+			public int Id { get; set; }
+			public string EmployerName { get; set; }
+		}
+
+	2.2 创建数据库上下文
+	使用EF的Code First方法对上面的模型创建数据库上下文
+	public class SeedingDataContext:DbContext
+		{
+			public virtual DbSet<Employer> Employers { get; set; }
+		}
+
+	2.3创建数据库初始化器类
+	假设我们使用的是DropCreateDatabaseAlways数据库初始化策略，那么初始化器类就要从该泛型类中继承，并传入数据库上下文作为类型参数，接下来，要种子化数据库就要重写DropCreateDatabaseAlways类的Seed方法，而Seed方法拿到了数据库上下文，因此我们可以使用它来将数据插入数据库:
+	public class SeedingDataInitializer:DropCreateDatabaseAlways<SeedingDataContext>
+		{
+			protected override void Seed(SeedingDataContext context)
+			{
+				for (int i = 0; i < 6; i++)
+				{
+					var employer = new Employer { EmployerName = "Employer"+(i+1) };
+					context.Employers.Add(employer);
+				}
+				base.Seed(context);
+			}
+		}
+	前面的代码，通过for循环创建了6个Employee对象，并将它们添加给数据库上下文类的Employee集合属性，这里值得注意的是我们并没有调用DbContext.SaveChanges,因为它会在基类中自动调用。
+	
+	2.4将数据库初始化器类用于数据库上下文类
+	public class SeedingDataContext:DbContext
+		{
+			public virtual DbSet<Employer> Employers { get; set; }
+
+			protected SeedingDataContext()
+			{
+				Database.SetInitializer<SeedingDataContext>(new SeedingDataInitializer());
+			}
+		}
+
+	2.5 Main方法中访问数据库   
+	main方法中只是简单的创建了数据库上下文对象，然后将数据读取出来
+	此外，我们可以从数据库初始化的Seed方法中，通过数据库上下文类给数据库闯入原生SQL来影响数据库模式
+
+	
+
+
+

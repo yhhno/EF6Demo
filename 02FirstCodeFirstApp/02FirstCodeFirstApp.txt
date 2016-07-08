@@ -1,6 +1,6 @@
 ﻿01 创建控制台项目
   1.1新建控制台应用醒目
-  1.2安装Entity Framework    Nuget 命令   Install-Package EntityFramework -Vsesion 6.1.3
+  1.2安装Entity Framework    Nuget 命令   Install-Package EntityFramework -Version 6.1.3
 
 02根据Net中的类来创建数据库
  上面步骤之后，我们可以开始写代码了，在写代码之前，你要始终记得，每个类就是相应的数据表中的一行数据，该类的属性对应的的是这行数据的列。

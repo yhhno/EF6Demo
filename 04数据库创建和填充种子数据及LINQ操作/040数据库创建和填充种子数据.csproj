@@ -4,11 +4,11 @@
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProjectGuid>{F1177532-5C63-4E9D-8422-C6A076CC2B85}</ProjectGuid>
+    <ProjectGuid>{04F7BDFD-046D-42C0-A791-13FAE359E030}</ProjectGuid>
     <OutputType>Exe</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>_031三种继承关系</RootNamespace>
-    <AssemblyName>031三种继承关系</AssemblyName>
+    <RootNamespace>_04数据库创建和填充种子数据及LINQ操作</RootNamespace>
+    <AssemblyName>04数据库创建和填充种子数据及LINQ操作</AssemblyName>
     <TargetFrameworkVersion>v4.6.1</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
@@ -56,22 +56,18 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Context.cs" />
-    <Compile Include="Employee.cs" />
-    <Compile Include="Initializer.cs" />
-    <Compile Include="Person.cs" />
+    <Compile Include="Employer.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="Vendor.cs" />
+    <Compile Include="Context.cs" />
+    <Compile Include="SeedingDataInitializer.cs" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="packages.config" />
-    <None Include="TPT继承类图.cd" />
     <None Include="App.config" />
+    <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
-    <Content Include="031三种继承关系.txt" />
-    <Content Include="TPT继承数据库.png" />
+    <Content Include="04数据库创建和填充种子数据.txt" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

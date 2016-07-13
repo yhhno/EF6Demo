@@ -1,0 +1,253 @@
+﻿3 LINQ To Entities 详解
+	到目前为止，我们已经学会了如何使用Code First方式来创建实体数据模型，也学会了使用EF领域建模，执行模型验证以及控制数据库连接参数，一旦数据建模完成，接下来就要对这些模型进行各种操作了
+
+，通常有以下两种方式
+	  1.LINQ to Entites
+	  2.Entity SQL
+	  本系列只讲LINQ to Entities ,Entity SQL就是通过在EF中执行SQL，大家可以自行研究
+
+	  3.1什么是LINQ to Entities
+	   LINQ,全称是Language Integrated Query（集成语言查询），是.NET语言中查询数据的一种技术，LINQ to Entities 是一种机制，它促进了使用LINQ对概念模型的查询
+	   因为LINQ是声明式语言，它让我们聚焦于我们需要什么数据而不是应该如何检索数据，LINQ to Entities在实体数据模型之上提供了一个很好的抽象，所以我们可以使用LINQ来指定检索什么数据，然后LINQ to Entities Provider会处理访问数据库事宜，并为我们取到必要的数据。
+
+	   当我们使用LINQ to Entities 对实体数据模型执行LINQ查询时，这些LINQ查询会首先被编译以决定我们需要什么数据，然后执行编译后的语句，从应用程序的角度看，最终返回.NET理解的CLR对象
+
+	   LINQ to Entities依赖EntityClient才能够使用EF的概念数据模型，接下来我们看下LINQ to Entities如何执行该查询并给应用程序返回结果：
+	    1.应用程序创建一个LINQ查询
+		2.LINQ to Entities会将该LINQ查询转换成EntityClient命名。
+		3.EntityClient命令然后使用EF和实体数据模型将这些命令转换成SQL查询
+		4.然后会使用底层的ADO.NET Provider将该SQL查询传入数据库
+		5.该查询然后在数据库中执行
+		6.执行结果返回给EF
+		7.EF然后将返回的结果转成CLR类型，比如领域实体
+		8.EntityClient使用项目，并返回必要的结果给应用程序。
+
+		EntityClient对象寄居在System.Data.EntityClient命名空间中，我们不必显式创建该对象，我们只需要使用命名空间，然后LINQ to Entities 会处理剩下的事情。
+		如果我们对多种类型的数据库使用LINQ to Entities,那么我们只需要为该数据库使用正确的ADO.NET provider,然后EntityClient就会使用这个provider对任何数据库的LINQ查询无缝执行。
+
+		3.2使用LINQ to Entities 操作实体
+		编写LINQ查询的方式有两种
+		 1.查询语法
+		 2.方法语法
+		 选择哪种语法完全取决你的习惯，两种语法的性能是一样的，查询语法相对更容易理解，但是灵活性稍差，相反，方法语法理解起来有点困难，但是提供了更强大的灵活性，使用方法语法可以进行链接多个查询，因此在单个语句中可以实现最大的结果。
+		 下面以一个简单的例子来理解一下这两种方法的区别，
+		 定义一个领域实体模型
+		 定义一个数据库上下文
+		 定义好连接字符串之后，如果使用该实体数据模型通过执行LINQ查询来获取Donator数据，那么可以在数据库上下文类的donators集合上操作，下面我们用两种方法来实现“找出打赏了50元的打赏者”
+		 1.查询语法   var donators=from donator in db.Donators where donator.Amount==50m select donator;
+		 2.方法语法   var donators=db.Donators.Where(d=>d.Amount==50m)
+		 两种方法的LINQ查询我们都使用了var 隐式类型变量将LINQ查询的结果存储在了donators变量中，使用LINQ to Entities，我们可以使用隐式类型变量作为输出结果，编译器可以由该隐式变量基于LINQ查询推断出输出类型，一般而言，输出类型是IQueryable<T>类型，我们的例子中应该是IQueryable<Donator>，当然我们也可以明确指定返回的类型为IQueryable<Donator>或者IEnumerable<Donator>.
+		 **重点理解**
+		 当使用LINQ to Entities时，理解何时使用IEnumerable和IQueryable很重要，如果使用了IEnumerable，查询会立即执行，如果使用了IQueryable，直到应用程序请求查询结果的枚举时才会执行查询，也就是查询延迟执行了，延迟到的时间点是枚举查询结果时。
+		 如何决定使用IEnumerable还是IQueryable呢？ 使用IQueryable会让你有机会创建一个使用多条语句的复杂LINQ语句，而不需要每条查询语句都对数据库执行查询，该查询只有在最终的LINQ查询要求枚举时才会执行
+
+
+		 3.3Linq操作
+		 新增Province实体类
+		 修改Donator实体类
+		 从上面定义的POCO类，我们不难发现，这两个实体是一对多关心，一个省份可能会有对个打赏者，
+
+		 3.3.1 执行简单的查询
+		 平时我们会经常需要从某张表中查询所有数据的集合，如这里查询所有打赏者的集合：
+
+		 LINQPad是一款练习LINQ to Entities出色的工具，在LINQPad中，我们已经在DbContext或ObjectContext内部了，不需要再实例化数据库上下文了，我们可以使用LINQ to Entities 查询数据库，我们也可以使用LINQPad查看生成的SQL查询。
+
+		 3.3.2使用导航属性
+		 如果实体间存在一种关系，那么这个关系是通过它们各自实体的导航属性进行暴露的，在上面的例子中，省份Province实体有一个Donators集合属性用于返回该省份的所有打赏者，而在打赏者Donator实体中，也有一个Province属性用于跟踪该打赏者属于哪个省份，导航属性简化了从一个实体到和它相关的实体，下面我们看一下如何使用导航属性获取与其相关的实体数据。
+		 比如：我们想要获取“山东省的所有捐赠者”
+
+		 3.3.3过滤数据
+		 实际上之前已经介绍了，根据某些条件过滤数据，可以在LINQ查询中使用Where，比如上面我们查询了山东省的所有打赏者，这里我们过滤出打赏金额在10~20之间的打赏者
+
+		 3.3.4 LINQ投影
+		 如果不指定投影的话，那么默认就是选择实体或者与之相关实体的所有字段，LINQ投影就是返回这些实体属性的子集或者返回一个包含了多个实体的某个属性的对象
+		 投影一般用在应用程序中的ViewModel（实体模型），我们可以从LINQ查询中直接返回一个视图模型，比如，我们想要查出“所有省的所有打赏者”；
+
+		 当然，如果我们已经定义了一个包含Province和DonatorList属性的类型（比如视图类型），那么也可以直接返回该类型，
+
+		 **在IQueryable<T>中处理结果也会提升性能，因为直到要查询的结果 枚举时才会执行生成的SQL。
+
+
+		 3.3.5分组Group
+		 分组的重要性想必大家都知道，这个肯定要掌握的，
+
+		 稍微解释下，上面的代码会根据省份名称进行分组，最终以匿名对象的投影返回，结果中的ProvinceName就是分组时用到的字段，Donators属性包含了通过ProvinceName找到的Donators集合
+
+		 3.3.6排序Ordering
+		 对特定的列进行升序或降序排列也是经常使用的操作，比如我们按照打赏金额进行排序。
+		 按照打赏金额升序排序（LINQ查询中，ascending关键字可省略）
+
+		 3.3.7聚合操作
+		 使用LINQ to Entities 可以执行下面的聚合操作
+		  1.Count   数量
+		  2.Sum     求和
+		  3.Min		最小值
+		  4.Max     最大值
+		  5.Average  平均值
+		 **** 可见，方法语法更加简洁，而且查询语法还要将前面的LINQ sql用括号括起来才能进行聚合（其实这是混合语法），没有方法语法简单灵活，所以下面的几个方法我们只用方法语法进行演示。
+
+		 3.3.8分页Paging  只用方法语法，查询语法不灵活
+		 分页也是提升性能的一种方式，而不是将所有符合条件的数据一次性全部加载出来，在LINQ to Entities中，实现分页的两个主要方法是：Skip和Take，这两个方法在使用前都要先进行排序
+		 Skip 该方法用于从查询结果中跳过前N条数据，假如我们根据Id排序后，跳过前2条数据。
+		 Take 该方法用于从查询结果中限制元素的数量，比如我们只想取出前3条打赏者
+		 分页实现：如果我们要实现分页功能，那么我们必须在相同的查询中同时使用Skip和Take方法
+		 由于现在数据库只有5条打赏者的数据，所有我打算每页2条数据，这样就有3页数据
+
+		 3.3.9实现多表连接Join
+		 如果两个实体之间是相互关联的，那么EF会在实体中创建一个导航属性来访问相关的实体，也可能存在一种情况，两个实体之间有公用的属性，但是没有在数据库中定义它们间的关系，如果我们要使用该隐式的关系，那么可以连接相关的实体。
+		 但是之前我们创建实体类时已经给两个实体建立了一对多关系，所有这里我们使用导航属性模拟join连接
+
+		 LINQ中的join和GroupJoin相当于SQL中的Left Outer Join，无论右边实体集合中是否包含任何实体，它总是会返回左边集合的所有元素。
+
+
+
+		 4懒加载和预加载
+		 使用LINQ to Entities时，理解懒加载和预加载的概念很重要，因为理解了这些，就会更好地帮助你编写有效的LINQ查询
+		 4.1 懒加载
+		 懒加载是这样一种过程，知道LINQ查询的结果被枚举时，该查询涉及到的相关实体才会从数据库加载，如果加载的实体包含了其他实体的导航属性，那么直到用户访问该导航属性时，这些相关的实体才会被加载
+		 在我们的领域模型中，Donator类的定义如下：
+		 public class Donator
+			{
+				public int Id { get; set; }
+				public string Name { get; set; }
+				public decimal Amount { get; set; }
+				public DateTime DonateDate { get; set; }
+				public virtual Province Province { get; set; }
+			}
+		 当我们使用下面的代码查询数据时，实际上并没有从数据库中加载数据
+		 var donators=db.Donators；
+		 要真正从数据中加载数据，我们要枚举donators，通过ToList（）方法或者在foreach循环中遍历都可以。
+		 看下面的代码注释
+		 ****懒加载
+		 var donators=db.Donators;//还没有查询数据库
+		 var donatorList=donators.ToList();//已经查询了数据库，但由于懒加载的存在，还没有加载Provinces表的数据
+		 var province=donatorList.ElementAt(0).Province;//因为用户访问了Provinces表的数据，因此这时才加载
+		 使用Code First时，懒加载依赖于导航属性的本质，如果导航属性是virtual修饰的，那么懒加载就开启了，如果要关闭懒加载，不要给导航属性加virtual关键字就可以了额
+		 如果想要为所有的实体关闭懒加载，那么可以在数据库中的上下文中去掉实体集合睡醒的virtual关键字即可。
+
+
+		 4.2预加载
+		 预加载是这样一种过程，当我们要加载查询中的主要实体时，同时也加载与之相关的实体，要实现预加载，我们要使用Include方法。下面我们看一下如何在加载Donators数据的时候，同时也预加载所有的Province数据。
+		 //预加载，以下两种方式都可以
+		 var donators2=db.Donators.Include(d=>d.Province).ToList();
+		 var donators3=db.Donators.Include("Provinces").ToList();
+		 这样，当我们从数据库中取到Donators集合时，也取到了Provinces集合。
+
+
+		<< 5插入数据
+		 将新的数据插入数据库有多种方式，可以使用之前的Add方法，也可以给实体的状态设置为Added，如果你要添加的实体包含子实体，那么Added状态会扩散到该图的所有实体中，，换而言之，如果根实体是新的，那么EF会假定你附加了一个新的对象图，该对象图一般指的是许多相关的实体形成的一个复杂的树结构。比如，我们有一个Province对象，每个省份有很多打赏者Donators，包含在Provinces类的List属性中，那么我们就是在处理一个对象图，本质上Donator实体是Person对象的孩子
+		 1.首先，我们创建一个新的具有打赏者的Province实例，然后，我们把该实例添加到数据库上下文中，最后调用SaveChanges将数据提交到数据库：
+		  这和之前看到的代码还是有些不同的，我们在初始化上下文之前就创建了对象，这个表明了EF会追踪当时上下文中为attached或者added状态的实体。
+
+		  2。另一种插入新数据的方式是使用DbContext API直接设置实体的转态，
+		  DbContext上的Entry方法返回了一个DbEntityEntry类的实例，该类有许多有用的属性和方法用于EF的高级实现和场景，
+		  下面是EntityState的枚举值
+		    状态 	     描述
+			Added 	    添加了一个新的实体。该状态会导致一个插入操作。
+			Deleted 	将一个实体标记为删除。设置该状态时，该实体会从DbSet中移除。该状态会导致删除操作。
+			Detached 	DbContext不再追踪该实体。
+			Modified 	自从DbContext开始追踪该实体，该实体的一个或多个属性已经更改了。该状态会导致更新操作。
+			Unchanged 	自从DbContext开始追踪该实体以来，它的任何属性都没有改变。
+
+
+		<<6更新数据
+		当EF知道  自从实体首次附加到DbContext之后  发生了改变，那么就会触发一个更新查询，自从查询数据时起，EF就会开始追踪每个属性的改变，当最终调用SaveChange时，只有改变的属性会包含在更新的SQL操作中。当想要在数据库中找到一个要更新的实体时，我们可以使用where方法来实现，也可以使用DbSet上的Find方法，该方法需要一个或多个参数，该参数对应表中的主键，，
+		下面的例子中，我们使用拥有唯一ID的列作为主键，因此我们只需要传一个参数，如果你使用了复合主键（包含了不止一列，常见于连接表），就需要出入每列的值，并且主键列的顺序要准确。
+		using (var db=new DonatorsContext())
+		 {
+			 var donator = db.Donators.Find(3);
+			 donator.Name = "醉千秋";//我想把“醉、千秋”中的顿号去掉
+			 db.SaveChanges();
+		 }
+		 如果执行了SaveChanges之后，你跟踪发送到SQL Server数据库的SQL查询时，会发现执行下面的sql语句。
+		 UPDATE [dbo].[Donators] SET [Name] = @0 WHERE ([Id] = @1)
+		 这个sql查询确实证明了只有那些显式修改的更改才会发送给数据库。如果我们只更改了Donator的Name属性，其他都没动，生成的SQL也是只更新Name字段，如果在SQL Profiler中查看整个代码块，会发现Find方法会生成下面的SQL代码：
+				 SELECT TOP (2) 
+				[Extent1].[Id] AS [Id], 
+				[Extent1].[Name] AS [Name], 
+				[Extent1].[Amount] AS [Amount], 
+				[Extent1].[DonateDate] AS [DonateDate], 
+				[Extent1].[Province_Id] AS [Province_Id]
+				FROM [dbo].[Donators] AS [Extent1]
+				WHERE [Extent1].[Id] = @p0
+		Find方法被翻译成了SingleOrDefault方法，所以是Select Top（2），
+		如果你是写桌面应用的话，可以使用Find方法先找到实体，再修改，最后提交，这是没问题的，但是在Web应用中就不行了，因为不能在两个web服务器调用之间 保留原始的上下文。我们也没必要寻找一个实体两次，第一次用于展示给用户，第二次用于更新，相反，我们可以之间修改实体的状态达到目的
+		因为我们的例子不是Web应用，所有这里直接给出代码了。
+			var province=new Province{Id=1,ProvinceName="山东省更新"};
+			province.Donators.Add(new Donator{
+			Name="醉、千秋",
+			Amount=12.2m,
+			DonatorDate=DateTime.Parse("2016-7-13")
+			});
+			using(var db=new DonatorContext(){
+			db.Entry(province).State=EntityState.Modified;
+			db.SaveChanges();
+			})
+		如果你也按照我这样做了，你会发现省份表更新了，但是Donators表根本没有修改成功，这是因为EF内部的插入和更新底层实现是不同的，当将状态设置为Modified时，EF不会将这个改变传播到整个对象图，因此，要使代码正常运行，需要添加一点代码：
+		using(var db=new DonatorContext()){
+		    db.Entry(province).State=EntityState.Modified;
+			foreach(var donator in province.Donators)
+			{
+			db.Entry(donatro).State=EntityState.Modified;ds
+			}
+			db.SaveChanges();
+		}
+
+		执行代码的结果就不贴了，有兴趣的话可以练习一下，我们需要手动处理的是为每个发生变化的实体设置状态，当然，如果要添加一个新的Donator，需要设置状态为Added，而不是Moidfied。此外，还有更重要的一点是，无论何时使用这种状态发生改变的方法时，我们都必须知道所有列的数据（例如上面的例子），包含每个实体的主键，这是因为当实体的状态发生变化时，EF会认为所有的属性都需要更新。
+
+
+		************追踪********
+		一旦实体被附加到上下文，EF就会追踪实体的状态，这么做是值的，因此，如果你查询了数据，那么上下文就开始追踪你的实体，如果你写一个web应用，那么该追踪就变成了一个查询操作的不必要开销，原因是只要web请求完成了获取数据，那么就会dispose上下文，并销毁追踪。EF有一种方法来减少这个开销。
+		
+		从执行结果可以看出，使用了AsNoTracking()方法之后，实体的状态都变成了Detached，而没有使用该方法时，状态是Unchanged，从之前的Entity状态表，我们可以知道，Unchange至少数据库上下文还在追踪，只是追踪到现在还没发现它有变化，而Detached根本就没有追踪，这样就减少了开销。
+
+		如果在Web应用中想更新用户修改的属性怎么做？ 假设你在Web客户端必须跟踪发生的变化并且拿到了变化的东西，那么还可以使用另一种方法来完成跟新操作，那就是使用DbSet的Attach方法。该方法本质上是将实体的额状态设置为Unchanged，并开始跟踪实体，附加一个实体后，一次只能设置一个更新的属性，你必须提前知道那个属性已经改变了
+
+
+		<<7删除数据
+		删除和更新有很多相似之处，我们可以使用一个查询找到数据，然后通过DbSet的Remove方法将它标记为删除，这种方法也有和更新相同的缺点，会导致一个Select查询和一个删除查询。
+
+		using (var db = new DonatorsContext())
+			{
+				PrintAllDonators(db);
+
+				Console.WriteLine("删除后的数据如下：");
+				var toDelete = db.Provinces.Find(2);
+				toDelete.Donators.ToList().ForEach(
+					d => db.Donators.Remove(d));
+				db.Provinces.Remove(toDelete);
+				db.SaveChanges();
+
+				PrintAllDonators(db);
+			}
+
+		上面的代码会删除每个子实体，然后再删除根实体，删除一个实体时必须要知道它的主键值，上面的代码删除了省份Id=2的数据，另外，可以使用RemoveRange方法删除多个实体。
+
+		插入操作和删除操作有一个很大的不同：删除操作必须要手动删除每个子记录，而插入操作不需要手动插入每个子记录，只需要插入父记录即可，你也可以是使用级联删除操作来代替，但是许多DBA都不屑于级联删除。
+		下面，我们通过为每个实体设置状态来删除实体，我们还是需要考虑每个独立的实体。
+
+		毫无疑问，你会发现删除操作非常不同于其他操作，要删除一个省份，我们只需要传入它的主键即可，要删除这个省份下的所有的打赏者，我们只需要在省份对象后追加要删除的打赏者对象，并给每个打赏者对象的Id属性赋值即可，在Web应用中，我们需要提交所有的主键，或者需要查询子记录来找到对应的主键。
+
+		《《8 使用内存in-memory数据
+		有时，你需要在已存在的上下文中找到一个实体而不是每次都去数据库去找，当创建新的数据库上下文时，EF默认总是对数据库进行查询。
+		应用场景：如果你的更新调用了很多方法，并且你想知道之前的某个方法添加了什么数据?这时，你可以使用DbSet的Local属性强制执行一个只针对内存数据的查询。
+		var query=db.Provinces.Local.Where(p=>p.ProvinceName.Contain("东").ToList());
+		Find方法在构建数据库查询之前，会先去本地的上下文中搜索，这个很好证明，只需要找到加载很多条实体数据，然后使用Find方法找到其中的一条即可。
+		using (var db=new DonatorsContext())
+			{
+				var provinces = db.Provinces.ToList();
+				var query = db.Provinces.Find(3);//还剩Id=3和4的两条数据了
+			}
+		打开Sql Server Profiler，可以看到，只查询了一次数据库，而且还是第一句代码查询的，这就证明了Find方法首先会去查询内存中的数据。
+
+		通过ChangeTracker对象，我们可以访问内存中所有实体的状态，也可以查看这些实体以及它们的DbChangeTraker
+
+
+
+
+		*****本章小结
+		首先，我们看到了如何控制多个数据库连接参数，如数据库位置，数据库名称，模式等等，我们也看到了如何使用数据库初始化器 创建数据库初始化策略以满足应用程序的需求，最后我们看到了如何在EF Code First中使用数据库初始化器来插入种子数据。
+
+		接下来，我们看到了如何在EF中使用LINQ to Entities来查询数据。我们看到了使用EF的LINQ to Entities无缝地执行各种数据检索任务，
+		最后，我们深入介绍了EF Code First中的插入，更新和删除。
+

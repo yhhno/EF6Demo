@@ -13,6 +13,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "031三种继承关系", "03
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "040数据库创建和填充种子数据", "04数据库创建和填充种子数据及LINQ操作\040数据库创建和填充种子数据.csproj", "{04F7BDFD-046D-42C0-A791-13FAE359E030}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "041LINQ之CRUD", "041LINQ之CRUD\041LINQ之CRUD.csproj", "{6EE93A96-F214-4921-A27B-8368F1E4567A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -39,6 +41,10 @@ Global
 		{04F7BDFD-046D-42C0-A791-13FAE359E030}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{04F7BDFD-046D-42C0-A791-13FAE359E030}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{04F7BDFD-046D-42C0-A791-13FAE359E030}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6EE93A96-F214-4921-A27B-8368F1E4567A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6EE93A96-F214-4921-A27B-8368F1E4567A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6EE93A96-F214-4921-A27B-8368F1E4567A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6EE93A96-F214-4921-A27B-8368F1E4567A}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

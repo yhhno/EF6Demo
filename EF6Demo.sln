@@ -17,6 +17,12 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "041LINQ之CRUD", "041LINQ�
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "05EF中ViewsAndStoreProcedure", "05EF中ViewsAndStoreProcedure\05EF中ViewsAndStoreProcedure.csproj", "{70C48E6A-9A12-414B-8421-E7565B6767B4}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "061数据库迁移之Data", "06数据库迁移之Data\061数据库迁移之Data.csproj", "{D307472E-9AB1-4ECD-8456-67FDFC7FDA31}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "062数据库迁移App", "06数据库迁移App\062数据库迁移App.csproj", "{2FF44FD3-F80F-4FB3-B32C-A2CE6CAE260F}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "06数据库迁移", "06数据库迁移", "{6C1F0EB7-2898-492C-A533-7291C892C81D}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -51,8 +57,20 @@ Global
 		{70C48E6A-9A12-414B-8421-E7565B6767B4}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{70C48E6A-9A12-414B-8421-E7565B6767B4}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{70C48E6A-9A12-414B-8421-E7565B6767B4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D307472E-9AB1-4ECD-8456-67FDFC7FDA31}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D307472E-9AB1-4ECD-8456-67FDFC7FDA31}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D307472E-9AB1-4ECD-8456-67FDFC7FDA31}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D307472E-9AB1-4ECD-8456-67FDFC7FDA31}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2FF44FD3-F80F-4FB3-B32C-A2CE6CAE260F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2FF44FD3-F80F-4FB3-B32C-A2CE6CAE260F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2FF44FD3-F80F-4FB3-B32C-A2CE6CAE260F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2FF44FD3-F80F-4FB3-B32C-A2CE6CAE260F}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{D307472E-9AB1-4ECD-8456-67FDFC7FDA31} = {6C1F0EB7-2898-492C-A533-7291C892C81D}
+		{2FF44FD3-F80F-4FB3-B32C-A2CE6CAE260F} = {6C1F0EB7-2898-492C-A533-7291C892C81D}
 	EndGlobalSection
 EndGlobal

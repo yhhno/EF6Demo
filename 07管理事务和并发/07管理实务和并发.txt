@@ -1,0 +1,460 @@
+﻿1 理解并发
+  并发管理解决的是允许多个实体同时更新，实际上这意味着允许同时在相同的数据上执行多个数据库操作。并发是在一个数据库上管理多个操作的一种方式，同时遵守了数据库操作的ACID属性（原子性，一致性，隔离性和持久性）
+  想象一下下面几种可能发生并发的场景：
+		1.用户甲和乙都尝试修改相同的实体
+		2.用户甲和乙都尝试删除相同的实体
+		3.用户甲正在尝试修改一个实体，用户乙已经删除了该实体
+		4.用户甲已经请求读取一个实体，用户乙读完该实体之后更新了它
+	这些场景可能会潜在地产生错误的数据，试想，成百上千的用户同时尝试操作一个相同的实体，这种并发问题将会对系统带来更大的影响
+
+	在处理与并发相关的问题时，一般有两种方法：
+	  1.积极并发：无论何时从数据库请求数据，数据都会被读取并保存到应用内存中。数据库级别没有放置任何显示锁。数据操作会按照数据层接收到的顺序执行。
+	  2.消极并发：无论何时从数据库请求数据，数据都会被读取，然后该数据上会加锁，因此没有人能访问该数据，这会降低并发相关问题的机会，缺点是加锁是一个昂贵的操作，会降低整个应用程序的性能，EF默认支持积极并发，这样，一旦所有的数据被读取了，就会呈现在内存中，当然，也可以配置EF使用消极并发，但是EF不直接支持。
+
+2理解积极并发
+  前面提到，在积极并发中，无论何时从数据库请求数据，数据都会读取并保存到应用内存中。数据库级别没有放置任何显式锁。因为这种方法没有添加显式锁，所以比消极并发更具扩展性和灵活性。使用积极并发，重点是如果发生了任何冲突，应用程序要亲自处理它们。最重要的是，使用积极并发控制时，在应用中要有一个冲突处理策略，要让应用程序的用户知道他们的修改是否因为冲突的缘故没有持久化。积极并发本质上允许冲突发生，然后以一种适当的方式解决冲突。
+  下面是处理冲突的策略的例子。
+    2.1忽略冲突/强制更新
+	   这种策略是让所有的用户更改相同的数据集，然后所有的修改都会更改数据库，这就意味着数据库会显示最后一次更新的值，这种策略会导致潜在的数据丢失，因为许多用户的更改都丢失了，只有最后一个用户的更改是可见的。
+	2.2部分更新
+	这种情况中，我们也允许所有的更改，但是不会更新完整的行，只有特定用户拥有的列更新了，这意味着，如果两个用户更新相同的记录但却不同的列，那么这两个更新都会成功，而且来自这两个用户的更改都是可见的。
+	2.3警告/询问用户
+	当一个用户尝试更新一个记录时，但是该记录自从他读取之后已经被别人修改了，这时应用程序就会警告该用户该数据已经被某人更改了，然后询问他是否仍然要重写该数据还是首先检查已经更新的数据。
+	2.4拒绝更改
+	当一个用户尝试更新一个记录时，但是该记录自从他读取之后已经被别人修改了，此时告诉该用户不允许更新该数据，因为数据已经被某人更新了。
+
+3理解消极并发
+和积极并发相反，消极并发的目标是永远不让任何冲突发生。这是通过在使用记录之前就在记录上放置显式锁实现的，数据库记录上可以得到两种类型的锁：
+       1.只读锁
+	   2.更新锁
+当把只读锁放在记录上时，应用程序只能读到该记录，如果应用程序要更新该记录，它必须获取到该记录上的更新锁。如果记录上加了只读锁，那么该记录仍然能够被想要只读锁的请求使用。然而，如果需要更新锁，该请求必须等到所有的只读锁释放。同样，如果记录上加了更新锁，那么其他的请求不能再在这个记录上加锁，该请求必须等到已存在的更新锁释放才能加锁。
+
+从上面的描述中，似乎消极并发能解决所有跟并发相关的问题，因为我们不必在应用中处理这些问题。然而，事实上并不是这样的，在使用消极并发管理之前，我们需要记住，使用消极并发有很多问题和开销，下面是使用消极并发面临的一些问题。
+       1.应用程序必须管理每个操作正在获取的所有锁
+	   2.加锁机制的内存需求会降低应用性能
+
+多个请求互相等待需要的锁，会增加死锁的可能性。由于这些原因，EF不直接支持消极并发。如果想使用消极并发的话，我们可以自定义数据库访问代码，此外，当使用消极并发时，LINQ to Entites不会正确工作。
+
+note：我们尽可能不要尝试使用消极并发，并发相关的冲突可以使用TimeStamp字段或者RowVersion类型处理，后面会做介绍
+
+
+4使用EF实现积极并发
+使用EF实现积极并发有很多方法，接下来我们就会看一下这些方法。我这里仍然使用打赏者的例子。
+新建一个控制台项目，这次只创建打赏者实体类
+	public class Donator
+	{
+		public int Id { get; set; }
+		public string Name { get; set; }
+		public decimal Amount { get; set; }
+		public DateTime DonateDate { get; set; }
+	}
+
+4.1EF的默认并发
+先看一下EF默认是如何处理并发的，现在假设我们的应用程序要更新一个Donator的Amount值，那么我们首先需要实现这个两个函数GetDonator（）和UpdateDonator(),前者用户获取指定的Donator,后者用于更新指定Donator。
+		static Donator GetDonator(int id)
+		{
+			using (var db=new Context())
+			{
+				return db.Donators.Find(id);
+			}
+		}
+
+		static void UpdateDonator(Donator donator)
+		{
+			using (var db=new Context())
+			{
+				db.Entry(donator).State=EntityState.Modified;
+				db.SaveChanges();
+			}
+		}
+
+	下面我们实现这么一种场景：有两个用户甲和乙都读取了同一个Donator实体，然后这两个用户都尝试更新这个实体的不同字段，比如甲更新Name字段，乙更新Amount字段，代码如下
+			//1.用户甲获取id=1的打赏者
+		var donator1 = GetDonator(1);
+		//2.用户乙也获取id=1的打赏者
+		var donator2 = GetDonator(1);
+		//3.用户甲只更新这个实体的Name字段
+		donator1.Name = "用户甲";
+		UpdateDonator(donator1);
+		//4.用户乙只更新这个实体的Amount字段
+		donator2.Amount = 100m;
+		UpdateDonator(donator2);
+
+		上面的代码尝试模拟了一种并发问题，现在两个用户都有相同的数据副本，然后尝试更新相同的记录，执行代码前，先看下数据库中的数据：
+		然后打一个断电，在执行甲操作的时候，去看下数据库，看到甲的更新已经产生了作用了。
+		继续执行完代码，再去看下数据库的数据
+
+		最后，可以看到用户乙的请求成功了，而用户甲的更新丢失了，因此，从上面的代码不难看出，如果我们使用EF更新整条记录，那么最后一个请求总会获取胜利，也就是说最后一次请求的更新会覆盖之前所有的请求。
+
+4.2设计处理字段级别并发的应用
+接下来，我们会看到如何编写处理字段级并发问题的应用代码。这种方式设计应用的思想是，只有更新的字段会在数据库中更改。这个就保证了如果多个用户正在更新不同的字段，所有的更改都会持久化到数据库。
+
+实现这个的关键是让该应用识别用户正在请求更新的所有列，然后为该用户有选择地更新那些不同的字段。通过以下两个东西来实现：
+   1.一个方法：该方法会给我们一个原始模型的克隆，只有用户请求的属性会更新为新值。
+   2.更新方法：首先需要创建一个而简单的方法，该方法需要模型属性的值，然后会返回一个新的模型，该模型除了用户尝试更新的属性之外，其他的属性值和原来的模型属性值相同。
+   static void UpdateDonatorEnhanced(Donator originalDonator,Donator newDonator)
+		{
+			using (var db=new Context())
+			{
+				//从数据库中检索最新的模型
+				var donator = db.Donators.Find(originalDonator.Id);
+				//接下来检查用户修改的每个属性
+				if (originalDonator.Name!=newDonator.Name )
+				{
+					//将新值更新到数据库
+					donator.Name = newDonator.Name;
+				}
+				if (originalDonator.Amount != newDonator.Amount)
+				{
+					//将新值更新到数据库
+					donator.Amount = newDonator.Amount;
+				}
+				//这里省略其他属性...
+				db.SaveChanges();
+			}
+		}
+
+如果用户指向更新Amount字段，方法的调用就像下面这样：
+var donator1=GetDonator(1);
+var donator2=GetDonator(1);
+var newDonator=GetUpdatedDonator(donator2.Id,donator1.Name,100m,donator1.DonateDate)
+上面的代码中，donator1是用户请求模型的原始对象，100m是打赏金额的新值。
+
+note：上面的方法超级简单，它只显示了如果获得具有更新属性值的克隆对象。现实生活中，很少会看到这样的代码，为了更简洁，我们还可以使用 映射模块 将 领域模型映射到 数据模型。
+
+下一步，需要更改更新方法，该更新方法会实现下面更新数据的算法
+  1.从数据库中检索最新的模型值。
+  2.检查原始模型和要更新的模型来找出更改属性的列值。
+  3.只更新步骤1中检索到的模型发生变化的属性。
+  4.保存更改
+
+  该算法的代码大概像下面的这个样子
+  static void UpdateDonatorEnhanced(Donator originalDonator,Donator newDonator)
+		{
+			using (var db=new Context())
+			{
+				//从数据库中检索最新的模型
+				var donator = db.Donators.Find(originalDonator.Id);
+				//接下来检查用户修改的每个属性
+				if (originalDonator.Name!=newDonator.Name )
+				{
+					//将新值更新到数据库
+					donator.Name = newDonator.Name;
+				}
+				if (originalDonator.Amount != newDonator.Amount)
+				{
+					//将新值更新到数据库
+					donator.Amount = newDonator.Amount;
+				}
+				//这里省略其他属性...
+				db.SaveChanges();
+			}
+		}
+
+接下来，使用这两个方法来更新应用程序代码，并检查结果。
+ #region 2.0   设计处理字段级别的并发应用
+ //1.用户甲读取id=1的打赏者
+ var donator1 = GetDonator(1);
+ //2.用户乙同样读取id=1的打赏者
+ var donator2 = GetDonator(1);
+ //3.用户甲通过创建一个新的对象来更新打赏金额为100m
+ var newDonator1 = GetUpdatedDonator(donator2.Id, donator1.Name,100m, donator1.DonateDate);
+UpdateDonatorEnhanced(donator1,newDonator1);
+ //4.用户乙通过创建一个新的对象来更新打赏者姓名为“并发测试”
+ var newDonator2 = GetUpdatedDonator(donator2.Id, "并发测试", donator2.Amount, donator2.DonateDate);
+ UpdateDonatorEnhanced(donator1, newDonator2);
+ #endregion
+
+ 运行之前，先看下数据库中的数据。
+
+ 执行代码时，在用户乙更新时打个断点。
+ 运行到断点处时，查看数据库，发现用户甲的操作已经执行了。
+
+ 继续运行程序，再次查看数据库的数据，返现用户乙的操作也执行了。
+
+
+ 通过查看数据库可以看到，两个用户的请求同一实体的更新值都持久化到数据库中了，因此，如果用户更新不同的字段，该程序可以有效地处理并发了。但是如果多个用户同时更新相同的字段，那么这种方法仍然显示的是最后一次请求的值，虽然这种方法减少了一些并发相关的问题，但是这种方法意味着我们必须写大量代码来处理并发。
+ 后面我们会看到如何使用EF提供的机制来处理并发问题。
+
+
+ 4.3实现RowVersion
+ 前面，我们看到了EF默认如何处理并发（最后一次请求获胜），然后看了如果多个用户尝试更新不同的字段时，如何设计应用处理这些问题，
+ 接下来，我们看一下当多个用户更新相同的字段时，使用EF如何处理字段级并发
+
+ EF让我们指定字段级并发，这样如果一个用户更新一个字段的同时，该字段已经被其他人更新过了，就会抛出一个并发相关的异常。使用这种方法，当多个用户尝试更新相同的字段时，我们就可以更有效地处理并发相关的问题。
+
+ 如果我们为多个字段使用了特定字段的并发，那么会降低应用性能，因为生成的Sql会更大，更加有效的方式就是使用RowVersion机制，RowVersion机制使用了一种数据库功能，每当更新行的时候，就会创建一个新的行值。
+
+ 给Donator实体添加一个属性：
+		 [Timestamp]
+		 public byte[] RowVersion{get;set;}
+		//修改上下文
+		protected override void OnModelCreating(DbModelBuilder modelBuilder)
+		{
+		modelBuilder.Entity<Donator>().Property(d=>d.RowVersion).IsRowVersion();
+		base.OnModelCreating(modelBuilder);
+		}
+
+现在，EF就会为并发控制追踪RowVersion列值，接下来尝试更新不同的列
+ //1.用户甲获取id=1的打赏者
+var donator1 = GetDonator(1);
+//2.用户乙也获取id=1的打赏者
+var donator2 = GetDonator(1);
+//3.用户甲只更新这个实体的Name字段
+donator1.Name = "用户甲";
+UpdateDonator(donator1);
+//4.用户乙只更新这个实体的Amount字段
+donator2.Amount = 100m;
+UpdateDonator(donator2); 
+
+运行程序，会抛出下面的异常
+异常信息：Entities may have been modified or deleted since entities were loaded.
+从抛出的异常信息来看，很明显是抛出了和并发相关的异常DbUpdateConcurrencyException，其他信息说明了自从实体加载以来，可能已经被修改或删除了
+无论何时一个用户尝试更新一条已经被其他用户更新的记录，都会获得异常DbUpdateConcurrencyException
+
+当实现并发时，我们总要编写异常处理的代码，给用户一个更友好的描述信息。比如
+	 //4.用户乙只更新这个实体的Amount字段
+	 try
+	 {
+		 donator2.Amount = 100m;
+		 UpdateDonator(donator2);
+		 Console.WriteLine("应该发生并发异常！");
+	 }
+	 catch (DbUpdateConcurrencyException ex)
+	 {
+		 Console.WriteLine("异常如愿发生！");
+	 }
+
+ 此时。我们应该使用当前的数据库值更新数据，然后重新更改。作为开发者，如果我们想要协助用户的话，可以使用EF的DbEntityEntry类获取当前的数据库值。
+
+
+
+
+
+
+ 5理解事务
+ 处理以数据为中心的应用时，另一个重要的话题就是事务管理，ADO.NET为事务管理提供了一个非常干净和有效的API。因为EF运行在ADO.NET之上，所以EF可以使用ADO.NET的事务管理功能。
+
+ 当从数据库角度谈论事务时，它意味着一系列操作被当做一个不可分割的操作，所有的操作要么全部成功，要么全部失败。事务的概念是一个可靠的工作单元。事务中的所有数据库操作应该被看做一个工作单元。
+
+ 从应用程序的角度来看，如果我们有多个数据库操作被当做一个工作单元，那么应该将这些操作包裹在一个事务中，为了能够使用事务，应用程序需要执行下面的步骤。
+     1.开始事务
+	 2.执行所有的查询，执行所有的数据库操作，这些操作被视为一个工作单元；
+	 3.如果所有的事务成功了，那么提交事务
+	 4.如果任何一个操作失败了，就回滚事务。
+
+
+6创建测试环境
+提到事务，最经典的例子莫过于银行转账，我们这里也使用这个例子来理解一下和事务相关的概念，为了简单模拟银行转账的情景，假设银行为不同的账户类型使用了不同的表，对应地，我们创建了两个实体OutputAccount和InputAccount
+		 [Table("OutputAccounts")]
+		 public class OutputAccount
+		 {
+			 public int Id { get; set; }
+			 [StringLength(8)]
+			 public string Name { get; set; }
+			 public decimal Balance { get; set; }
+		 }
+
+
+		[Table("InputAccounts")]
+		public class InputAccount
+		{
+			public int Id { get; set; }
+			[StringLength(8)]
+			public string Name { get; set; }
+			public decimal Balance { get; set; }
+		}
+
+从应用程序的角度看，无论何时用户将钱从OutputAccount转入InputAccount,这个操作应该被视为一个工作单元。永远不应该发生OutputAccount的金额扣除了，而InputAccount的金额没有增加！接下来我们就看一下使用EF如何管理实务。
+
+现在给数据库插入数据，有了初始值
+
+接下来，我们尝试使用EF的事务从OutputAccount的甲中转入1000给InputAccount中的乙，
+
+note：这只是个例子，只为了以一种简单的方式描述涉及到的概念，现实中，这个场景的数据库会远比这个更复杂和更优化。
+
+
+
+7EF的默认事务处理
+EF的默认行为是，无论何时执行任何涉及Create，Update或Delete的查询，都会默认创建事务，当DbContext类上的SaveChange()方法被调用时，事务都会被提交。
+
+要实现我们的场景，代码应该是下面这样的：
+		#region 4.0 EF默认的事务处理
+
+		int outputId = 2,inputId=1;
+		decimal transferAmount = 1000m;
+		using (var db=new Context())
+		{
+			//1 检索事务中涉及的账户
+			var outputAccount = db.OutputAccounts.Find(outputId);
+			var inputAccount = db.InputAccounts.Find(inputId);
+			//2 从输出账户上扣除1000
+			outputAccount.Balance -= transferAmount;
+			//3 从输入账户上增加1000
+			inputAccount.Balance += transferAmount;
+
+			//4 提交事务
+			db.SaveChanges();
+		}
+		#endregion
+
+运行程序，可以看到，甲账户上少了1000，而乙账户上多了1000，因此，这两个操作有效地被包裹在一个事务中，并作为一个工作单元执行，如果任何一个操作失败，数据就不会发生变化。
+
+Note：因为把读操作放在事务中没有好处，但是却降低了整个应用程序的性能，因此，EF不会对涉及数据库的Select查询使用事务。
+
+
+
+7.1使用TransactionScope处理事务
+如果有一个场景具有多个DbContext对象，那么我们想将涉及多个DbContext对象的操作关联为一个工作单元，这时，我们需要在TransactionScope对象内部包裹SaveChanges方法的调用，为了描述这个场景，我们使用DbContext类的两个不同实例来执行扣款和收款：
+		#region 5.0  使用TransactionScope处理事务
+		 int outputId = 2, inputId = 1;
+		 decimal transferAmount = 1000m;
+		 using (var ts=new TransactionScope(TransactionScopeOption.Required))
+		 {
+			 var db1=new Context();
+			 var db2=new Context();
+			 //1 检索事务中涉及的账户
+			 var outputAccount = db1.OutputAccounts.Find(outputId);
+			 var inputAccount = db2.InputAccounts.Find(inputId);
+			 //2 从输出账户上扣除1000
+			 outputAccount.Balance -= transferAmount;
+			 //3 从输入账户上增加1000
+			 inputAccount.Balance += transferAmount;
+
+			 db1.SaveChanges();
+			 db2.SaveChanges();
+
+			 ts.Complete();
+		 }
+		 #endregion
+
+ 上面的代码中，我们使用了两个不同的DbContext实例执行扣款和收款操作。因此，默认的EF行为不会工作，在调用各自的SaveChanges()方法时，和上下文相关的各个事务不会提交。相反，因为它们都在TransactionScope对象的内部，所以，当TransactionScope对象的Complete（）方法调用时，事务才会提交。如果任何一个操作失败，就会发生异常，TransactionScope就不会调用Complete()方法，从而混滚更改。
+
+
+
+
+ 8使用EF管理事务
+ 从EF6起，EF在DbContext对象上提供了Database.BeginTransaction（）方法，当使用上下文类在事务中执行原生sql命令时这个方法特别有用。
+
+ 接下来，看一下如何使用这个新方法管理事务，这里我们使用原生SQL从OutputAccounts中扣款，使用模型类给InputAccounts收款。
+		  #region 6.0 使用EF6管理事务
+		 int outputId = 2, inputId = 1;
+		 decimal transferAmount = 1000m;
+		 using (var db=new Context())
+		 {
+			 using (var trans=db.Database.BeginTransaction())
+			 {
+				 try
+				 {
+					 var sql = "Update OutputAccounts set Balance=Balance-@amountToDebit where id=@outputId";
+					 db.Database.ExecuteSqlCommand(sql, new SqlParameter("@amountToDebit", transferAmount), new SqlParameter("@outputId",outputId));
+
+					 var inputAccount = db.InputAccounts.Find(inputId);
+					 inputAccount.Balance += transferAmount;
+					 db.SaveChanges();
+
+					 trans.Commit();
+				 }
+				 catch (Exception ex)
+				 {
+					 trans.Rollback();
+				 }
+			 }
+		 }
+		 #endregion
+
+
+ 稍作解释 ，首先创建一个DbContext类的实例，然后使用这个实例通过调用Database.BeginTransaction()方法开始了一个事务。该方法给我们返回了一个DbContextTransaction对象的句柄，使用该句柄可以提交或者回滚事务，然后使用原生SQL从OutputAccounts中扣款，使用模型类为InputAccounts收款，调用SaveChanges（）方法只会影响第二个操作（在事务提交之后影响），但不会提交事务，如果两个操作都成功了，那么就调用DbContextTransaction对象的Commit()方法，否则，我们就处理异常并调用Rollback（）方法回滚事务。
+
+ Note：这种方法只用于EF6，如果是EF6之前的版本，必须依赖TransactionScope管理事务。
+
+
+
+ 8.1使用已存在的事务
+ 有时，我们想在EF的DbContext类中使用一个已存在的事务，原因可能有这么几个：
+     1.一些操作可能在应用的不同部分完成。
+	 2.对老项目使用了EF，并且这个老项目使用了一个类库，这个类库给我们提供了事务或数据库连接的句柄。
+对于这些场景，EF允许我们在DbContext类中使用一个和事务相关联的已存在连接。接下来，写一个简单的函数来模拟老项目的类库提供句柄，该函数使用纯粹的ADO.NET执行扣款操作：
+
+			//模拟老项目的类库
+			static bool DebitOutputAccount(SqlConnection conn, SqlTransaction trans, int accountId, decimal amountToDebit)
+			{
+				int affectedRows = 0;
+				var command = conn.CreateCommand();
+				command.Transaction = trans;
+				command.CommandType=CommandType.Text;
+				command.CommandText = "Update OutputAccounts set Balance=Balance-@amountToDebit where id=@accountId";
+				command.Parameters.AddRange(new SqlParameter[]
+				{
+					new SqlParameter("@amountToDebit",amountToDebit), 
+					new SqlParameter("@accountId",accountId) 
+				});
+
+				try
+				{
+					affectedRows= command.ExecuteNonQuery();
+				}
+				catch (Exception ex)
+				{
+					throw ex;
+				}
+				return affectedRows == 1;
+			}
+
+该函数需要四个参数，来自调用者的数据库连接对象和事务对象，以及扣款账户Id和扣款金额，知道了这些参数之后就可以执行扣款操作的更新查询。
+
+
+现在，假设这个函数以类库的行为提供给我们，很显然，我们什么都不能更改，这种情况下，我们不能使用Database.BeginTransaction方法，因为我们需要将SQLConnection和SqlTransaction对象传给该函数，并把该函数放到我们的事务里。这样，我们就需要首先建立一个SqlConnection，然后开始SqlTransaction。代码如下：
+
+   #region 7.0 使用已存在的事务
+    int outputId = 2, inputId = 1;
+    decimal transferAmount = 1000m;
+    var connectionString = ConfigurationManager.ConnectionStrings["ConcurrencyAndTransactionManagementConn"].ConnectionString;
+    using (var conn=new SqlConnection(connectionString))
+    {
+        conn.Open();
+        using (var trans=conn.BeginTransaction())
+        {
+            try
+            {
+                var result = DebitOutputAccount(conn, trans, outputId, transferAmount);
+                if (!result)
+                {
+                    throw new Exception("不能正常扣款！");
+                }
+                using (var db=new Context(conn,contextOwnsConnection:false))
+                {
+                    db.Database.UseTransaction(trans);
+                    var inputAccount=db.InputAccounts.Find(inputId);
+                    inputAccount.Balance += transferAmount;
+                    db.SaveChanges();
+                }
+                trans.Commit();
+            }
+            catch (Exception ex) 
+            {
+                trans.Rollback();
+            }
+        }
+    }
+
+    #endregion
+
+	稍作解释，首先创建一个SqlConnection，然后使用该链接关联一个SqlTransaction。事务开始后，我们就是用连接和事务对象调用老项目中方法，然后检查一下调用老项目中的方法是否执行成功！如果失败，我们直接抛出异常，捕获异常后会回滚该事务，如果成功了，我们使用DbContext类为InputAccounts用户添加收款，并提交事务，
+	这里有一句代码值得注意，db.Database.UserTransaction（trans），这句话的意思是，EF执行的操作都在外部传入的事务中执行，还有，contextOwnsConnection的值为false，表示上下文和数据库连接没有关系，上下文释放了，数据库连接还没释放；反之为true的话，上下文释放了，数据库连接也就释放了。
+
+
+
+	9选择合适的事务管理
+	目前，我们已经知道了好几种使用EF处理事务的方法，
+	   1.如果只有一个DbContext类，那么应该尽力使用EF的默认事务管理，我们总应该将所有的操作组成一个在相同的DbContext对象的作用域中执行的工作单元，SaveChanges（）方法会处理提交事务
+	   2.如果使用了多个DbContext对象，那么管理事务的最佳方法可能就是把调用放在TransactionScope对象的作用域中了。
+	   3.如果要执行原生SQL，并想把这些操作和事务关联起来，那么应该使用EF提供的Database.BeginTransaction（）方法。然而这种方法只支持EF6，不支持之前的版本。
+	   4.如果想为要求SqlTransaction的老项目使用EF，那么可以使用Database.UseTransaction（）方法。在EF6中可用。
+
+
+
+10：本章小结
+首先，我们看了下如何管理EF中并发相关的问题，然后讨论了如何使用EF实现积极并发，我们也看了消极并发的一些基本概念，以及为什么EF不支持和不推荐使用消极并发
+
+然后，我们看了如何使用EF管理事务，先看了EF管理事务的默认实现，然后看了使用EF控制事务管理，最后看到了使用EF实现应用程序需要额大多数信息。

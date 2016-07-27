@@ -27,9 +27,15 @@ namespace _07管理事务和并发
 
         public virtual DbSet<OutputAccount> OutputAccounts { get; set; }
 
+        //其他地方使用
+        //public virtual DbSet<ConfigItem> ConfigItem { get; set; }
+
+
         protected override void OnModelCreating(DbModelBuilder modelBuilder)
         {
             modelBuilder.Entity<Donator>().Property(d => d.RowVersion).IsRowVersion();
+            //其他地方使用
+            //modelBuilder.Configurations.Add(new ConfigItemMap());
             base.OnModelCreating(modelBuilder);
         }
     }

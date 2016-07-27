@@ -1,0 +1,149 @@
+﻿1.命名，参数和返回类型
+在TAP（Task-based Asynchronous Pattern）中的异步操作的启动和完成是通过一个单独的方法来表现的，因此只有一个方法要命名。这与IAsyncResult模式或者APM（Asynchronous Programming Model，异步编程模型）模式形成对比，后者必须要有开始方法名和结束方法名；还与基于事件（event-based）的异步模式（EAP）不同，它们要求方法名以Async为后缀，而且要求一个或对个事件，事件句柄委托类型和派生自Event参数的类型。TAP中的异步方法使用Async后缀命名，跟在操作名称的后面（例如MethodNameAsync）,TAP中的异步方法类型返回一个Task类型或者Task<TResult>,基于相应的同步方法是否分别返回一个void或者TResult类型。
+
+
+比如，思考下面的Read方法，它将特定数量的数据读取到一个以特定偏移量的buffer中：
+
+
+同步版本：
+public class MyClass{
+pubic int Read(byte[] buffer,int offset,in count);
+}
+
+对应APM版本：
+public class MyClass{
+public IAsynResult BeginRead(byte[] buffer,int offset,int count ,AsyncCallback callback, object state);
+public int EndRead(IAsyncResult asyncResult);
+}
+
+
+对应EAP版本
+
+public class MyCalss
+{
+public void ReadAsync(byte[] buffer,int offset,int count);
+public event ReadCompletedEventHandler ReaderCompleted;
+}
+public delegate void ReadCompletedEventHandler(object sender,ReadCompletedEventArgs eventArgs);
+public class ReadCompletedEventArgs:AsyncCompletedEventArgs{
+public int Result{
+get;
+}
+
+}
+
+
+对应TAP版本
+public class MyClass{
+public Task<int> ReadAsync(byte[] buffer,int offset,int count);
+}
+
+
+一个基本的TAP方法的参数应该和同步方法的参数相同，且顺序相同，然后 “out”和“Ref” 参数不遵从这个规则，并且应该避免使用它们。通过out或者ref返回的任何数据可以作为返回的Task<TResult>结果的一部分，可以利用一个元组或者一个自定义数据结构容纳多个值。
+
+纯粹致力于创建，操作，或组合的任务方法（该方法的异步目的在方法名上或者在方法上以类型命名是明确的）不需要遵循上述命名模式；这些方法通常被称为“组合子”。这种方法的例子包括Task。WhenAll和Task.WhenAny,本文档后面的会更深入地讨论。
+
+
+
+2表现
+
+	2.1初始化异步操作
+在返回结果的任务之前，基于TAP异步方法允许同步地处理少量的工作。这项工作应保持在所需的最低数量，执行如验证参数和启动异步操作的操作。很可能从用户界面线程 将调用异步方法，因此所有长时间运行的异步方法的同步前期部分工作可能会影响响应能力。很有可能同时将启动多个异步方法，因此所有长时间运行的异步方法的同步前期工作部分工作可能会推迟启动其他异步操作，从而减少并发的好处。
+
+在某些情况下，完成操作所需的工作量小于异步启动操作需要的工作量（例如，从流中读取数据，这个读取工作可以被已经缓冲在内存中的数据所满足）。在这种情况下，操作可能同步完成，返回一个已经完成的任务。
+
+	2.2异常
+一个异步方法只应该直接捕获一个MethodNameAsync调用时抛出的异常以响应用法错误。对于其他所有的错误，在异步方法执行期间发生的异常应该分配给返回的任务。这种情况实在Task返回之前，异步方法同步完成下发生的。一般地，一个Task至多包含一个异常。然而，对于一个Task表示多个操作（如，Task.WhenAll）的情况下，单个Task也会关联多个异常
+
+Note：每个.NET设计指南都指出，一个用法错误可以通过改变调用方法的码来避免。比如，当把null作为一个方法的参数传递时，错误状态就会发生，错误条件通常被表示为ArgumentNullException，开发者可以修改调用码来确保null没有传递过，换言之，开发者可以并且应该确保用法错误从来没有在生产代码中发生过。
+
+	2.3目标环境
+异步执行的发生取决于TAP方法的实现。TAP方法的开发人员可能选择在线程池上执行工作负载，也可能选择使用异步I/O实现它，因而没有被绑定到大量操作执行的线程上，也可以选择在特定的线程上运行，如UI线程，或者其他一些潜在的上下文。甚至可能是这种情况，TAP方法没有东西执行，简单返回一个在系统中其他地方情况发生的Task（如Task<TData>表示TData到达一个排队的数据结构）。
+
+TAP方法的调用者也可能阻塞等待TAP方法的完成（通过在结果的Task上同步地等待），或者利用延续在异步操作完成时执行附加代码。延续创建者在延续代码执行的地方有控制权。这些延续代码要么通过Task类（如ContinueWith）显式地创建，要么使用语言支持隐式地建立在延续代码之上（如C#中的await）。
+
+	2.4Task状态
+Task类提供了异步操作的生命周期，该生命周期通过TaskStatus枚举表示。为了支持派生自Task和Task<TResult>类型的案例，以及来自调度的构建分离，Task类暴露了一个Start方法。通过public构造函数创建的Tasks被称为“冷”任务，在“冷”任务中，它们以非调度（non-scheduled）的TaskStatus.Created状态开始生命周期。直到在这些实例上Start调用时，它们才促使被调度。所有在“热”状态开始生命周期的其他Task。意味着它们表示的异步操作已经初始化了，它们的TaskStatus是一个除了Created之外的其他枚举值。
+
+所有从TAP方法返回的Tasks肯定是“热的”。如果TAP方法内部使用一个Task的构造函数来实例化要返回的task。那么此TAP方法必须在返回task之前在Task对象上调用Strat方法。TAP方法的消费者可以安全地假定返回的task是“热的”，并不应该尝试在任何返回自TAP方法的Task上调用Strat。在“热的”task上调用Strat会导致InvalidOperationException（Task类自动处理这个检查）
+
+
+	2.5可选：撤销
+TAP中的撤销对于异步方法的实现者和异步方法的消费者都是选择加入的。如果一个操作将要取消，那么它会暴露一个接受System.Threading.CancellationToken的MethodNameAsync的重载。异步操作会监视对于撤销请求的这个token，如果接收到了撤销请求，可以选择处理该请求并取消操作，如果处理请求导致任务过早地结束，那么从
+TAP方法返回的Task会以TaskStatus.Canceled状态结束。
+
+为了暴露一个可取消的异步操作，TAP实现提供了在同步对应的方法的参数后接受一个CancellationToken的重载，按照惯例，该参数命名为“cancellationToken”.
+
+TAP版本：带取消功能
+public Task<int> ReadAsync(byte[] buffer,int offset,int cout,CancellationToken cancellationToken);
+
+如果token已经请求了撤销并且异步操作尊重该请求，那么返回的task将会以TaskStatus.Canceled状态结束，将会产生没有可利用的Result，并且没有异常。Canceled状态被认为是一个伴随着Faulted和RanToCompletion状态的任务 最终或完成的状态。因此，Canceled状态的task的IsCompleted属性返回true。当一个Canceled状态的task完成时，任何该task注册的延续操作都会被调度或执行，除非这些延续操作通过具体的TaskContinuationOptions用法在被创建时取消了（如TaskContinuationOptions.NotOnCanceled）。任何异步地等待一个通过语言特性使用的撤销的task的代码将会继续执行并且受到一个OperationCanceledException（或派生于该异常的类型）。在该task（通过Wait或WaitAll方法）上同步等待而阻塞的任何代码也会继续执行并抛出异常。
+
+如果CancellationToken已经在接受那个token的TAP方法调用之前发出了取消请求，那么该TAP方法必须返回一个Canceled状态的Task。然而，如果撤销在异步操作执行期间请求的，那么异步操作不需要尊重该撤销请求。只有由于撤销请求的操作完成时，返回的Task才会以Canceled状态接收，如果一个撤销被请求了，但是结果或异常仍产生了，那么Task就会分别以RantoCompletion或Faulted的状态结束。
+
+首先，在使用异步方法的开发者心目中，那些渴望撤销的方法，需要提供一个接受CancellationTokn变量的重载。对于不可取消的方法，不应该提供接受CancellationToken的重载。这个有助于告诉调用者目标方法实际上是是否 是可取消的。不渴望撤销的消费者可以调用一个接受CancellationToken的方法来把CancellationToken.None作为提供的参数值。CancellationToken.None功能上等价于default（CancellationToken）。
+
+
+	2.6可选：进度报告
+一些异步操作得益于提供的进度通知，一般利用这些进度通知来更新关于异步操作进度的UI.
+
+在TAP中，进度通过IProgress<T>接口传递给异步方法的名为“progress”的参数来处理。在该异步方法调用时提供这个进度接口有助于消除来自于错误用法的竞争条件，这些错误的用法是因为在 此操作可能错过更新之后， 事件句柄错误地注册导致的。。更重要的是，它使变化的进度实现可被利用，因为由消费者决定。比如，消费者仅仅关心最新的进度更新，或者可能缓冲所有更新，或者可能仅仅想要为每个更新调用一个action，或者可能想控制是否调用 封装到特定的线程。所有这些可能 通过使用一个不同的接口的实现来完成，每个接口可以定制到特殊的消费者需求，因为有了撤销，如果API支持进度通知，那么TAP实现应该只提供一个IProgress<T>参数。
+
+比如，如果我们上面提到的ReadAsync方法可以以迄今读取字节数的形式能报告中间的进度，那么进度的回调（callback）可以是一个IProgress<int>:
+
+TAP版本：带进度
+public Task<int> ReadAsync(byte[] buffer,int offset,int count,IProgress<int> progress);
+
+如果FindFilesAsync方法返回一个所有文件的列表，该列表满足一个特殊的搜索模式，那么进度回调可以提供完成工作的百分比和当前部分结果集的估计，它也可以这样处理元组，如
+
+public Task<ReadOnlyCollection<FileInfo>> FindFilesAsync( string pattern, IProgress<Tupe<double,ReadOnlyCollection<List<FileInfo>>>> progress);
+或者使用API具体的数据类型，如：
+
+public Task<ReadOnlyCollection<FileInfo>> FindFilesAsync（string pattern，IProgress<FindFilesProgressInfo> progress）;
+在后一种情况中，特殊的数据类型以“ProgressInfo”为后缀。
+
+如果TAP实现提供了接受progress参数的重载，那么它们必须允许参数为null，为null的情况下，进度不会报告。TAP实现应该同步地报告IProgress<T>对象的进度，使得比快速提供进度的异步实现更廉价，并且允许进度的消费者决定如何以及在哪里更好地处理信息（例如进度实例本身可以选择在一个捕获的同步上下文上收集回调函数和引发事件）。
+
+
+	2.7IProgress<T>实现
+Progress<T>作为。NET Framework 4.5的一部分，是IProgress<T>的单一实现（未来会提供更多的实现），Progress<T>声明如下：
+
+	public class Progress<T> :IProgress<T>
+	{
+	public Progress();
+	public Progress(Action<T> handler);
+	protected virtual void OnReport(T value);
+	public event EventHandler<T> ProgressChanged;
+	}
+
+Pregress<T>的实例公开了一个ProgressChanged事件，它是每次异步操作 报告进度更新的时候触发。当Progress<T>实例被实例化时，该事件在捕获的同步上下文上触发（如果没有上下文可用，那么用默认的线程池上下文）。句柄可能会用这个事件注册；一个单独的句柄也可以提供给Progress实例的构造函数（这纯粹是为了方便，就像ProgressChanged事件的事件句柄）。进度更新异步触发是为了事件句柄执行时避免延迟异步操作。其他的IProgress<T>实现可能选择使用了不同的语义。
+
+
+	2.8如何选择提供的重载函数
+有了CancellationToken和IProgress<T>参数，TAP的实现默认有4个重载函数：
+
+	public Task MethodNameAsync(....);
+	public Task MethodNameAsync(....,CancellationToken cancellationToken);
+	public Task MethodNameAsync(....,IProgress<T> progress);
+	public Task MethodNameAsync(....,CancellationToken cancellationToken,IProgress<T> progress);
+
+然而，因为它们没有提供cancellation和progress的能力，许多TAP实现有了最短的重载的需求：
+	public Task MethodNameAsync(...);
+如果一个实现支持cancellation或者progress但不同时支持，那么TAP实现可以提供2个重载：
+	public Task MethodNameAsync(…);
+	public Task MethodNameAsync(…, CancellationToken cancellationToken);
+
+	// … or …
+
+	public Task MethodNameAsync(…);
+	public Task MethodNameAsync(…, IProgress<T> progress);
+
+如果实现同时支持cancellation和progress，那么它可以默认提供4个重载，然而，只有两个有效：
+	public Task MethodNameAsync(…);
+	public Task MethodNameAsync(…, CancellationToken cancellationToken, IProgress<T> progress);
+
+为了得到那2个遗失的重载，开发者可以通过给CancellationToken参数传递CancellationToken.None（或者default（CancellationToken））和/ 或给progress参数传递null
+
+如果期望TAP方法的每一种用法都应该cancellation和/ 或progress，那么不接受相关参数的重载可以忽略。
+
+如果TAP方法的多个重载公开了可选的cancellation和/ 或progress，那么不支持cancellation和/ 或给progress的重载的表现 应该像支持他们的重载已经传递了CancellationToken.None和null 分别给cancellation和progress一样。

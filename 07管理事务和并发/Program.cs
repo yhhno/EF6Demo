@@ -20,7 +20,7 @@ namespace _07管理事务和并发
 
             //EF的默认并发();
 
-            //处理字段级别的并发应用();
+            处理字段级别的并发应用();
 
             //为并发实现RowVersion();
 
@@ -30,7 +30,7 @@ namespace _07管理事务和并发
 
             //使用EF6管理事务();
 
-            使用已存在的事务();
+            //使用已存在的事务();
 
             FluentConsole.Green.Line("操作完成！");
             Console.ReadKey();

@@ -29,6 +29,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "EF6相关", "EF6相关", "{
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "01基于Task的异步模式的定义", "基于Task的异步模式\01基于Task的异步模式的定义\01基于Task的异步模式的定义.csproj", "{BF88BE87-06E8-465E-A935-8125C123FEC4}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "02实现基于Task的异步模式", "基于Task的异步模式\02实现基于Task的异步模式\02实现基于Task的异步模式.csproj", "{FE4FA4AB-5D8B-452A-8F7C-E5A9F6C0E1F2}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -79,6 +81,10 @@ Global
 		{BF88BE87-06E8-465E-A935-8125C123FEC4}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{BF88BE87-06E8-465E-A935-8125C123FEC4}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{BF88BE87-06E8-465E-A935-8125C123FEC4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FE4FA4AB-5D8B-452A-8F7C-E5A9F6C0E1F2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FE4FA4AB-5D8B-452A-8F7C-E5A9F6C0E1F2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FE4FA4AB-5D8B-452A-8F7C-E5A9F6C0E1F2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FE4FA4AB-5D8B-452A-8F7C-E5A9F6C0E1F2}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
